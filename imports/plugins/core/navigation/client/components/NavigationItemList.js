@@ -1,11 +1,14 @@
-import React, { Component } from "react";
+/* eslint-disable react/no-multi-comp */
+import React from "react";
 import PropTypes from "prop-types";
-import withStyles from "@material-ui/core/styles/withStyles";
+import i18next from "i18next";
+import { makeStyles } from "@material-ui/core/styles";
 import Button from "@material-ui/core/Button";
 import NavigationItemCard from "./NavigationItemCard";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
-
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   root: {
     display: "flex",
     flexDirection: "column",
@@ -31,19 +34,17 @@ const styles = (theme) => ({
     paddingRight: theme.spacing(2),
     paddingBottom: theme.spacing(2)
   }
-});
+}));
 
-class NavigationItemList extends Component {
-  static propTypes = {
-    classes: PropTypes.object,
-    navigationItems: PropTypes.array,
-    onClickAddNavigationItem: PropTypes.func,
-    onClickUpdateNavigationItem: PropTypes.func,
-    onSetDraggingNavigationItemId: PropTypes.func
-  }
+const NavigationItemList = (props) => {
+  const classes = useStyles();
+  const {
+    onClickAddNavigationItem,
+    navigationItems,
+    onClickUpdateNavigationItem
+  } = props;
 
-  renderNavigationItems() {
-    const { navigationItems, onClickUpdateNavigationItem, onSetDraggingNavigationItemId } = this.props;
+  const renderNavigationItems = () => {
     if (navigationItems) {
       return navigationItems.map((navigationItem) => {
         const row = { node: { navigationItem } };
@@ -52,29 +53,34 @@ class NavigationItemList extends Component {
             row={row}
             key={navigationItem._id}
             onClickUpdateNavigationItem={onClickUpdateNavigationItem}
-            onSetDraggingNavigationItemId={onSetDraggingNavigationItemId}
           />
         );
       });
     }
     return null;
-  }
+  };
 
-  render() {
-    const { classes, onClickAddNavigationItem } = this.props;
-    return (
+  return (
+    <DndProvider backend={HTML5Backend} >
       <div className={classes.root}>
         <div className={classes.header}>
-          <Button color="primary" variant="outlined" onClick={onClickAddNavigationItem}>Add navigation item</Button>
+          <Button color="primary" variant="outlined" onClick={onClickAddNavigationItem}>{i18next.t("admin.navigation.addItem")}</Button>
         </div>
         <div className={classes.list}>
           <div className={classes.listContent}>
-            {this.renderNavigationItems()}
+            {renderNavigationItems()}
           </div>
         </div>
       </div>
-    );
-  }
-}
+    </DndProvider>
+  );
+};
 
-export default withStyles(styles, { name: "RuiNavigationItemList" })(NavigationItemList);
+NavigationItemList.propTypes = {
+  navigationItems: PropTypes.array,
+  onClickAddNavigationItem: PropTypes.func,
+  onClickUpdateNavigationItem: PropTypes.func
+};
+
+
+export default NavigationItemList;

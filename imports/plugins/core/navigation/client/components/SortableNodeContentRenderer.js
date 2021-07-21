@@ -11,16 +11,18 @@ import {
 import ChevronRightIcon from "mdi-material-ui/ChevronRight";
 import DragIcon from "mdi-material-ui/Drag";
 import FileOutlineIcon from "mdi-material-ui/FileOutline";
+import i18next from "i18next";
 
 const useStyles = makeStyles((theme) => ({
   badge: {
-    backgroundColor: theme.palette.colors.black05,
+    backgroundColor: theme.palette.colors.goodcommerceNotification,
     color: theme.palette.colors.black65,
-    padding: "0 8px",
+    padding: "2px 8px 8px 8px",
     height: 20,
     borderRadius: 10,
     border: `1px solid ${theme.palette.colors.black10}`,
     fontSize: "0.73rem",
+    fontWeight: "bold",
     display: "inline-block",
     marginLeft: theme.spacing()
   },
@@ -229,9 +231,11 @@ function SortableNodeContentRenderer(props) {
               <div className={classes.rowContent}>
                 <Typography className={classes.title} variant="subtitle1">
                   {typeof nodeTitle === "function" ? nodeTitle({ node, path, treeIndex }) : nodeTitle}
-                  {node.isVisible === false && <Typography className={classes.badge} key="isVisible" variant="caption">{"Hide from storefront"}</Typography>}
-                  {node.isPrivate && <Typography className={classes.badge} variant="caption">{"Admin only"}</Typography>}
-                  {node.isSecondary && <Typography className={classes.badge} variant="caption">{"Secondary nav only"}</Typography>}
+                  {node.isVisible === false && <Typography className={classes.badge} key="isVisible" variant="caption">
+                    {i18next.t("admin.navigation.hideFromStorefront")}
+                  </Typography>}
+                  {node.isPrivate && <Typography className={classes.badge} variant="caption">{i18next.t("admin.navigation.adminOnly")}</Typography>}
+                  {node.isSecondary && <Typography className={classes.badge} variant="caption">{i18next.t("admin.navigation.secondaryNavOnly")}</Typography>}
                 </Typography>
                 <Typography className={classes.subtitle} variant="caption">
                   <FileOutlineIcon className={classes.subtitleIcon} fontSize="inherit" />

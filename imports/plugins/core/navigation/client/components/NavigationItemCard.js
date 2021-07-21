@@ -1,16 +1,15 @@
-import React, { Component } from "react";
+import React from "react";
 import PropTypes from "prop-types";
-import { compose } from "recompose";
 import { DragSource } from "react-dnd";
 import Card from "@material-ui/core/Card";
 import IconButton from "@material-ui/core/IconButton";
-import { withStyles } from "@material-ui/core/styles";
+import { makeStyles } from "@material-ui/core/styles";
 import DragIcon from "mdi-material-ui/Drag";
 import FileOutlineIcon from "mdi-material-ui/FileOutline";
 import PencilIcon from "mdi-material-ui/Pencil";
 import { Typography } from "@material-ui/core";
 
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   card: {
     height: 60,
     display: "flex",
@@ -35,7 +34,7 @@ const styles = (theme) => ({
   subtitleIcon: {
     marginRight: 4
   }
-});
+}));
 
 const navigationItemSource = {
   beginDrag(props) {
@@ -58,74 +57,65 @@ const navigationItemSource = {
  * @param {Object} monitor DnD monitor
  * @returns {Object} DnD connection source
  */
-function sourceCollect(connect, monitor) {
-  return {
-    connectDragPreview: connect.dragPreview(),
-    connectDragSource: connect.dragSource(),
-    isDragging: monitor.isDragging()
-  };
-}
+const sourceCollect = (connect, monitor) => ({
+  connectDragPreview: connect.dragPreview(),
+  connectDragSource: connect.dragSource(),
+  isDragging: monitor.isDragging()
+});
 
-class NavigationItemCard extends Component {
-  static propTypes = {
-    classes: PropTypes.object,
-    connectDragPreview: PropTypes.func,
-    connectDragSource: PropTypes.func,
-    isDragging: PropTypes.bool,
-    onClickUpdateNavigationItem: PropTypes.func,
-    row: PropTypes.object
-  };
+const NavigationItemCard = (props) => {
+  const classes = useStyles();
+  const {
+    connectDragPreview,
+    connectDragSource,
+    isDragging,
+    row: { node: { navigationItem } },
+    onClickUpdateNavigationItem
+  } = props;
 
-  handleClickEdit = () => {
-    const { onClickUpdateNavigationItem, row: { node: { navigationItem } } } = this.props;
+  const { draftData } = navigationItem;
+  const { value } = draftData.content.find((content) => content.language === "en");
+  const title = value;
+  const { url: subtitle } = draftData;
+
+  const handleClickEdit = () => {
     onClickUpdateNavigationItem(navigationItem);
-  }
+  };
 
-  render() {
-    const {
-      classes,
-      connectDragPreview,
-      connectDragSource,
-      isDragging,
-      row
-    } = this.props;
+  const dragHandle = (
+    <div>
+      <IconButton className={classes.iconButton}>
+        <DragIcon />
+      </IconButton>
+    </div>
+  );
 
-    const { node: { navigationItem } } = row;
-    const { draftData } = navigationItem;
-    const { value } = draftData.content.find((content) => content.language === "en");
-    const title = value;
-    const { url: subtitle } = draftData;
-
-    const dragHandle = (
-      <div>
-        <IconButton className={classes.iconButton}>
-          <DragIcon />
+  const toRender = (
+    <div style={{ opacity: isDragging ? 0.5 : 1 }}>
+      <Card className={classes.card}>
+        {connectDragSource(dragHandle, { dropEffect: "copy" })}
+        <div className={classes.rowContent}>
+          <Typography>{title}</Typography>
+          <Typography className={classes.subtitle} variant="caption">
+            <FileOutlineIcon className={classes.subtitleIcon} fontSize="inherit" /> {subtitle}
+          </Typography>
+        </div>
+        <IconButton onClick={handleClickEdit}>
+          <PencilIcon />
         </IconButton>
-      </div>
-    );
+      </Card>
+    </div>
+  );
 
-    const toRender = (
-      <div style={{ opacity: isDragging ? 0.5 : 1 }}>
-        <Card className={classes.card}>
-          {connectDragSource(dragHandle, { dropEffect: "copy" })}
-          <div className={classes.rowContent}>
-            <Typography>{title}</Typography>
-            <Typography className={classes.subtitle} variant="caption">
-              <FileOutlineIcon className={classes.subtitleIcon} fontSize="inherit" /> {subtitle}
-            </Typography>
-          </div>
-          <IconButton onClick={this.handleClickEdit}>
-            <PencilIcon />
-          </IconButton>
-        </Card>
-      </div>
-    );
+  return connectDragPreview(<div>{toRender}</div>);
+};
 
-    return connectDragPreview(<div>{toRender}</div>);
-  }
-}
+NavigationItemCard.propTypes = {
+  connectDragPreview: PropTypes.func,
+  connectDragSource: PropTypes.func,
+  isDragging: PropTypes.bool,
+  onClickUpdateNavigationItem: PropTypes.func,
+  row: PropTypes.object
+};
 
-export default compose(
-  DragSource("CARD", navigationItemSource, sourceCollect),
-  withStyles(styles, { name: "RuiNavigationItemCard" })
-)(NavigationItemCard);
+export default DragSource("CARD", navigationItemSource, sourceCollect)(NavigationItemCard);

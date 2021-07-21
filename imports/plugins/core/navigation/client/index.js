@@ -2,8 +2,7 @@
 import React from "react";
 import LinkIcon from "mdi-material-ui/LinkVariant";
 import { registerOperatorRoute } from "/imports/client/ui";
-import NavigationDashboard from "./containers/navigationDashboardContainer";
-import "./containers";
+import NavigationDashboard from "./components/NavigationDashboard";
 
 registerOperatorRoute({
   group: "navigation",

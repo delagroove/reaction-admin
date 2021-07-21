@@ -1,23 +1,33 @@
-import React, { Component, Fragment } from "react";
+/* eslint-disable react/no-multi-comp */
+import React, { useState, useEffect, Fragment } from "react";
 import PropTypes from "prop-types";
-import { uniqueId } from "lodash";
 import SimpleSchema from "simpl-schema";
-import Grid from "@material-ui/core/Grid";
-import { Form } from "reacto-form";
-import withStyles from "@material-ui/core/styles/withStyles";
-import Button from "@material-ui/core/Button";
-import Divider from "@material-ui/core/Divider";
-import IconButton from "@material-ui/core/IconButton";
+import useReactoForm from "reacto-form/cjs/useReactoForm";
+import muiOptions from "reacto-form/cjs/muiOptions";
+import muiCheckboxOptions from "reacto-form/esm/muiCheckboxOptions";
+import Typography from "@material-ui/core/Typography";
+import FormGroup from "@material-ui/core/FormGroup";
+import FormControl from "@material-ui/core/FormControl";
+import FormLabel from "@material-ui/core/FormLabel";
+import FormControlLabel from "@material-ui/core/FormControlLabel";
+import Checkbox from "@material-ui/core/Checkbox";
+import { makeStyles } from "@material-ui/core/styles";
+import { Button, Grid, Chip, Divider, IconButton } from "@material-ui/core";
+
 import CloseIcon from "mdi-material-ui/Close";
-import Checkbox from "@reactioncommerce/components/Checkbox/v1";
 import ErrorsBlock from "@reactioncommerce/components/ErrorsBlock/v1";
 import Field from "@reactioncommerce/components/Field/v1";
-import TextInput from "@reactioncommerce/components/TextInput/v1";
+import TextField from "@reactioncommerce/catalyst/TextField";
 import { i18next } from "/client/api";
 import ConfirmDialog from "@reactioncommerce/catalyst/ConfirmDialog";
 import { changeNodeAtPath } from "react-sortable-tree";
+import { components } from "react-select";
+import CreatableSelect from "react-select/creatable";
+import getNavigationTreeItemIds from "../utils/getNavigationTreeItemIds";
+import { useUI } from "../context/UIContext";
+import useGetUrls from "../hooks/useGetUrls";
 
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   closeButtonContainer: {
     textAlign: "right"
   },
@@ -27,215 +37,407 @@ const styles = (theme) => ({
   },
   formActionButton: {
     marginLeft: theme.spacing()
+  },
+  option: {
+    position: "absolute",
+    right: 0,
+    fontSize: theme.spacing(1.5),
+    marginRight: theme.spacing(1)
+  },
+  textField: {
+    marginTop: theme.spacing(3)
+  },
+  configItem: {
+    marginTop: theme.spacing(3)
   }
-});
+}));
 
 const navigationItemFormSchema = new SimpleSchema({
-  name: String,
-  url: String,
+  _id: {
+    type: String,
+    optional: true
+  },
+  name: {
+    type: String,
+    min: 2,
+    max: 50
+  },
+  url: {
+    type: String,
+    min: 1,
+    max: 100
+  },
   classNames: {
     type: String,
     optional: true
   },
-  isUrlRelative: Boolean,
-  shouldOpenInNewWindow: Boolean
+  isUrlRelative: {
+    type: Boolean,
+    optional: true
+  },
+  shouldOpenInNewWindow: {
+    type: Boolean,
+    optional: true
+  },
+  isVisible: {
+    type: Boolean,
+    optional: true
+  },
+  isPrivate: {
+    type: Boolean,
+    optional: true
+  },
+  isSecondary: {
+    type: Boolean,
+    optional: true
+  },
+  isInNavigationTree: {
+    type: Boolean,
+    optional: true
+  }
 });
 
 const navigationItemValidator = navigationItemFormSchema.getFormValidator();
 
-class NavigationItemForm extends Component {
-  static propTypes = {
-    classes: PropTypes.object,
-    createNavigationItem: PropTypes.func,
-    deleteNavigationItem: PropTypes.func,
-    mode: PropTypes.oneOf(["create", "edit"]),
-    navigationItem: PropTypes.object,
-    onCloseForm: PropTypes.func,
-    onSetSortableNavigationTree: PropTypes.func,
-    shopId: PropTypes.string,
-    sortableTreeNode: PropTypes.object,
-    updateNavigationItem: PropTypes.func
-  }
+const NavigationItemForm = (props) => {
+  const classes = useStyles();
+  const { getAssets, isGetAssetsLoading, assets } = useGetUrls();
+  const { onSetHandleNavigationInfo, sortableNavigationTree, isUnSavedChanges } = useUI();
 
-  uniqueInstanceIdentifier = uniqueId("NavigationItemForm");
+  const [values, setValues] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [urlAsset, setUrlAsset] = useState({});
+  const [defaultOption, setDefaultOption] = useState(null);
 
-  handleFormValidate = (doc) => navigationItemValidator(navigationItemFormSchema.clean(doc));
+  const {
+    createNavigationItem,
+    mode,
+    navigationItem,
+    onCloseForm,
+    updateNavigationItem,
+    deleteNavigationItem,
+    shopId,
+    sortableTreeNode,
+    onSetSortableNavigationTree
+  } = props;
 
-  handleFormSubmit = (input) => {
-    const { createNavigationItem, mode, navigationItem, onCloseForm, updateNavigationItem, shopId, sortableTreeNode, onSetSortableNavigationTree } = this.props;
-    const { name, url, isUrlRelative, isVisible, isPrivate, isSecondary, shouldOpenInNewWindow, classNames } = input;
+  useEffect(() => {
+    if (mode === "edit") {
+      setValues(navigationItem);
+      setUrlAsset(navigationItem.url);
+      setDefaultOption({ value: navigationItem.url, label: navigationItem.url });
+    } else {
+      // TODO: translate this
+      setDefaultOption({ value: "/", label: i18next.t('navigationItem.selOrCreateUrl') });
+    }
+  }, [navigationItem, mode]);
 
-    const navigationItemUpdate = {
-      draftData: {
-        content: {
-          value: name,
-          language: "en"
+  const { getFirstErrorMessage, getInputProps, hasErrors, getErrors, submitForm } = useReactoForm({
+    onChanging: (formData) => {
+      setValues({
+        ...formData,
+        url: urlAsset
+      });
+    },
+    async onSubmit(formData) {
+      setLoading(true);
+      const formDataCleaned = navigationItemFormSchema.clean(formData);
+      const { name, url, isUrlRelative, shouldOpenInNewWindow, classNames } = formDataCleaned;
+
+      const navigationItemUpdate = {
+        draftData: {
+          content: {
+            value: name,
+            language: "en"
+          },
+          url,
+          isUrlRelative,
+          shouldOpenInNewWindow,
+          classNames
         },
-        url,
-        isUrlRelative,
-        shouldOpenInNewWindow,
-        classNames
-      },
-      shopId
-    };
+        shopId
+      };
 
-    if (mode === "create") {
-      createNavigationItem({
-        variables: {
-          input: {
-            navigationItem: navigationItemUpdate
+      if (mode === "create") {
+        await createNavigationItem(navigationItemUpdate);
+      } else {
+        await updateNavigationItem({
+          id: navigationItem._id,
+          navigationItem: navigationItemUpdate,
+          shopId
+        });
+      }
+
+      if (navigationItem && navigationItem.isInNavigationTree) {
+        const { isVisible, isPrivate, isSecondary } = formDataCleaned;
+
+        const newSortableNavigationTree = changeNodeAtPath({
+          ...sortableTreeNode,
+          newNode: {
+            ...sortableTreeNode.node,
+            isVisible,
+            isPrivate,
+            isSecondary
           }
-        }
+        });
+
+        onSetSortableNavigationTree(newSortableNavigationTree);
+      }
+
+      setLoading(false);
+      return onCloseForm();
+    },
+    validator: navigationItemValidator,
+    value: values
+    // logErrorsOnSubmit: true
+  });
+
+  const handleClickDelete = () => {
+    const navigationTreeItemIds = getNavigationTreeItemIds(sortableNavigationTree);
+    const isInTree = navigationTreeItemIds.includes(navigationItem._id);
+
+    // Don't allow deleting items if they are in the tree
+    if (!isInTree && !isUnSavedChanges) {
+      deleteNavigationItem({
+        id: navigationItem._id,
+        shopId
+      });
+    } else if (isUnSavedChanges) {
+      // TODO: translate this
+      onSetHandleNavigationInfo({
+        error: true,
+        message: i18next.t('navigationItem.messages.firtSaveChanges'),
+        typeMessage: "error"
       });
     } else {
-      updateNavigationItem({
-        variables: {
-          input: {
-            id: navigationItem._id,
-            navigationItem: navigationItemUpdate,
-            shopId
-          }
-        }
+      // TODO: translate this
+      onSetHandleNavigationInfo({
+        error: true,
+        message: i18next.t('navigationItem.messages.notDeleteIsUsed'),
+        typeMessage: "error"
       });
     }
 
-    if (navigationItem && navigationItem.isInNavigationTree) {
-      const newSortableNavigationTree = changeNodeAtPath({
-        ...sortableTreeNode,
-        newNode: {
-          ...sortableTreeNode.node,
-          isVisible,
-          isPrivate,
-          isSecondary
-        }
+    return onCloseForm();
+  };
+
+  const handleChange = (newValue, actionMeta) => {
+    if (actionMeta.action === "create-option" || actionMeta.action === "select-option") {
+      setUrlAsset(newValue.value);
+      setValues({
+        ...values,
+        isUrlRelative: true,
+        url: newValue.value
       });
-
-      onSetSortableNavigationTree(newSortableNavigationTree);
     }
+  };
 
-    return onCloseForm();
-  }
-
-  handleClickDelete = () => {
-    const { deleteNavigationItem, navigationItem, onCloseForm, shopId } = this.props;
-    deleteNavigationItem({
-      variables: {
-        input: {
-          id: navigationItem._id,
-          shopId
-        }
-      }
-    });
-    return onCloseForm();
-  }
-
-  handleClickSave = () => {
-    if (this.form) {
-      this.form.submit();
+  const handleInputChange = (inputValue, actionMeta) => {
+    if (actionMeta === "input-change") {
+      getAssets(shopId, inputValue);
     }
-  }
+  };
 
-  renderActionTitle() {
-    const { mode } = this.props;
-    if (mode === "create") {
-      return <h4>Add Navigation Item</h4>;
-    }
-    return <h4>Edit Navigation Item</h4>;
-  }
+  const handleFocus = () => {
+    getAssets(shopId);
+  };
 
-  render() {
-    const { classes, onCloseForm, mode, navigationItem } = this.props;
-
-    const nameInputId = `name_${this.uniqueInstanceIdentifier}`;
-    const urlInputId = `url_${this.uniqueInstanceIdentifier}`;
-    const classNamesInputId = `classNames_${this.uniqueInstanceIdentifier}`;
-
-    navigationItemFormSchema.labels({
-      name: i18next.t("navigationItem.displayName"),
-      url: i18next.t("navigationItem.url"),
-      isUrlRelative: i18next.t("navigationItem.isUrlRelative"),
-      shouldOpenInNewWindow: i18next.t("navigationItem.shouldOpenInNewWindow"),
-      classNames: i18next.t("navigationItem.classNames")
-    });
+  const Option = (options) => {
+    const {
+      data: { label, type, color }
+    } = options;
 
     return (
-      <Fragment>
-        <Grid container>
-          <Grid item xs={8}>
-            {this.renderActionTitle()}
-          </Grid>
-          <Grid item xs={4} className={classes.closeButtonContainer}>
-            <IconButton onClick={onCloseForm}>
-              <CloseIcon />
-            </IconButton>
-          </Grid>
-        </Grid>
-        <Grid container>
-          <Grid item xs={12}>
-            <Form ref={(formRef) => { this.form = formRef; }} onSubmit={this.handleFormSubmit} validator={this.handleFormValidate} value={navigationItem}>
-              <Field name="name" label={i18next.t("navigationItem.displayName")} labelFor={nameInputId}>
-                <TextInput id={nameInputId} name="name" />
-                <ErrorsBlock names={["name"]} />
-              </Field>
-              <Field name="url" label={i18next.t("navigationItem.url")} labelFor={urlInputId}>
-                <TextInput id={urlInputId} name="url" />
-                <ErrorsBlock names={["url"]} />
-              </Field>
-              <Field name="isUrlRelative">
-                <Checkbox name="isUrlRelative" label={i18next.t("navigationItem.isUrlRelative")} />
-                <ErrorsBlock names={["isUrlRelative"]} />
-              </Field>
-              <Field name="shouldOpenInNewWindow">
-                <Checkbox name="shouldOpenInNewWindow" label={i18next.t("navigationItem.shouldOpenInNewWindow")} />
-                <ErrorsBlock names={["shouldOpenInNewWindow"]} />
-              </Field>
-              <Field name="classNames" label={i18next.t("navigationItem.classNames")} labelFor={classNamesInputId}>
-                <TextInput id={classNamesInputId} name="classNames" />
-                <ErrorsBlock names={["classNames"]} />
-              </Field>
-              {navigationItem && navigationItem.isInNavigationTree &&
-                <Fragment>
-                  <Divider />
-                  <Field name="isVisible" helpText={i18next.t("navigationItem.isVisibleHelpText")}>
-                    <Checkbox name="isVisible" label={i18next.t("navigationItem.isVisible")} />
-                    <ErrorsBlock names={["isVisible"]} />
-                  </Field>
-                  <Field name="isPrivate" helpText={i18next.t("navigationItem.isPrivateHelpText")}>
-                    <Checkbox name="isPrivate" label={i18next.t("navigationItem.isPrivate")} />
-                    <ErrorsBlock names={["isPrivate"]} />
-                  </Field>
-                  <Field name="isSecondary" helpText={i18next.t("navigationItem.isSecondaryHelpText")}>
-                    <Checkbox name="isSecondary" label={i18next.t("navigationItem.isSecondary")} />
-                    <ErrorsBlock names={["isSecondary"]} />
-                  </Field>
-                </Fragment>
-              }
-            </Form>
-          </Grid>
-        </Grid>
-        <Grid>
-          <Grid item xs={12} className={classes.formActions}>
-            { mode !== "create" && (
-              <ConfirmDialog
-                title={i18next.t("admin.navigation.deleteTitle")}
-                message={i18next.t("admin.navigation.deleteMessage")}
-                onConfirm={this.handleClickDelete}
-              >
-                {({ openDialog }) => (
-                  <Button color="primary" onClick={openDialog}>{i18next.t("admin.navigation.delete")}</Button>
-                )}
-              </ConfirmDialog>
-            )}
-            <Button className={classes.formActionButton} color="primary" onClick={onCloseForm} variant="outlined">{i18next.t("app.cancel")}</Button>
-            <Button className={classes.formActionButton} color="primary" onClick={this.handleClickSave} variant="contained">
-              {i18next.t("app.saveChanges")}
-            </Button>
-          </Grid>
-        </Grid>
-      </Fragment>
+      <div>
+        <components.Option {...options}>
+          {label}
+          <Chip size="small" label={type || "custom"} color={color || "default"} className={classes.option} />
+        </components.Option>
+      </div>
     );
-  }
-}
+  };
 
-export default withStyles(styles, { name: "RuiNavigationItemForm" })(NavigationItemForm);
+  return (
+    <Fragment>
+      <Grid container>
+        <Grid item xs={8}>
+          {mode === "create" && <h4>{i18next.t("admin.navigation.addItem")}</h4>}
+          {mode !== "create" && <h4>{i18next.t("admin.navigation.editItem")}</h4>}
+        </Grid>
+        <Grid item xs={4} className={classes.closeButtonContainer}>
+          <IconButton onClick={onCloseForm}>
+            <CloseIcon />
+          </IconButton>
+        </Grid>
+      </Grid>
+      <Grid container>
+        <Grid item xs={12}>
+          <TextField
+            className={classes.textField}
+            name="name"
+            error={hasErrors(["name"])}
+            helperText={getFirstErrorMessage(["name"])}
+            label={i18next.t("navigationItem.displayName")}
+            {...getInputProps("name", muiOptions)}
+          />
 
+          <TextField
+            className={classes.textField}
+            name="classNames"
+            error={hasErrors(["classNames"])}
+            helperText={getFirstErrorMessage(["classNames"])}
+            label={i18next.t("navigationItem.classNames")}
+            {...getInputProps("classNames", muiOptions)}
+          />
+
+          <Field label={i18next.t("navigationItem.url")}>
+            {defaultOption && (
+              <CreatableSelect
+                isClearable
+                isSearchable
+                defaultValue={defaultOption}
+                onChange={handleChange}
+                onInputChange={handleInputChange}
+                onFocus={handleFocus}
+                options={assets}
+                isLoading={isGetAssetsLoading}
+                components={{ Option }}
+                styles={{
+                  option: (base) => ({
+                    ...base,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center"
+                  })
+                }}
+              />
+            )}
+            <ErrorsBlock names={["url"]} errors={getErrors(["url"])} />
+          </Field>
+
+          <FormGroup row>
+            <FormControlLabel
+              control={<Checkbox color="primary" />}
+              name="isUrlRelative"
+              label={i18next.t("navigationItem.isUrlRelative")}
+              {...getInputProps("isUrlRelative", muiCheckboxOptions)}
+            />
+            <FormControlLabel
+              control={<Checkbox color="primary" />}
+              name="shouldOpenInNewWindow"
+              label={i18next.t("navigationItem.shouldOpenInNewWindow")}
+              {...getInputProps("shouldOpenInNewWindow", muiCheckboxOptions)}
+            />
+          </FormGroup>
+
+          {navigationItem && navigationItem.isInNavigationTree && (
+            <Fragment>
+              <Divider />
+
+              <FormControl className={classes.configItem} component="fieldset">
+                <FormGroup row>
+                  <FormControlLabel
+                    control={<Checkbox color="primary" />}
+                    name="isVisible"
+                    label={i18next.t("navigationItem.isVisible")}
+                    {...getInputProps("isVisible", muiCheckboxOptions)}
+                  />
+                  <ErrorsBlock names={["isVisible"]} />
+                </FormGroup>
+                <FormLabel component="legend">
+                  <Typography variant="caption" display="block" gutterBottom>
+                    {i18next.t("navigationItem.isVisibleHelpText")}
+                  </Typography>
+                </FormLabel>
+              </FormControl>
+
+              <Divider />
+
+              <FormControl className={classes.configItem} component="fieldset">
+                <FormGroup row>
+                  <FormControlLabel
+                    control={<Checkbox color="primary" />}
+                    name="isPrivate"
+                    label={i18next.t("navigationItem.isPrivate")}
+                    {...getInputProps("isPrivate", muiCheckboxOptions)}
+                  />
+                  <ErrorsBlock names={["isPrivate"]} />
+                </FormGroup>
+                <FormLabel component="legend">
+                  <Typography variant="caption" display="block" gutterBottom>
+                    {i18next.t("navigationItem.isPrivateHelpText")}
+                  </Typography>
+                </FormLabel>
+              </FormControl>
+
+              <Divider />
+
+              <FormControl className={classes.configItem} component="fieldset">
+                <FormGroup row>
+                  <FormControlLabel
+                    control={<Checkbox color="primary" />}
+                    name="isSecondary"
+                    label={i18next.t("navigationItem.isSecondary")}
+                    {...getInputProps("isSecondary", muiCheckboxOptions)}
+                  />
+                  <ErrorsBlock names={["isSecondary"]} />
+                </FormGroup>
+                <FormLabel component="legend">
+                  <Typography variant="caption" display="block" gutterBottom>
+                    {i18next.t("navigationItem.isSecondaryHelpText")}
+                  </Typography>
+                </FormLabel>
+              </FormControl>
+
+              <Divider />
+            </Fragment>
+          )}
+        </Grid>
+      </Grid>
+      <Grid>
+        <Grid item xs={12} className={classes.formActions}>
+          {mode !== "create" && (
+            <ConfirmDialog
+              title={i18next.t("admin.navigation.deleteTitle")}
+              message={i18next.t("admin.navigation.deleteMessage")}
+              onConfirm={handleClickDelete}
+            >
+              {({ openDialog }) => (
+                <Button color="primary" onClick={openDialog}>
+                  {i18next.t("admin.navigation.delete")}
+                </Button>
+              )}
+            </ConfirmDialog>
+          )}
+          <Button className={classes.formActionButton} color="primary" onClick={onCloseForm} variant="outlined">
+            {i18next.t("app.cancel")}
+          </Button>
+          <Button
+            className={classes.formActionButton}
+            color="primary"
+            type="submit"
+            onClick={submitForm}
+            disabled={loading}
+            variant="contained"
+          >
+            {i18next.t("app.saveChanges")}
+          </Button>
+        </Grid>
+      </Grid>
+    </Fragment>
+  );
+};
+
+NavigationItemForm.propTypes = {
+  createNavigationItem: PropTypes.func,
+  deleteNavigationItem: PropTypes.func,
+  mode: PropTypes.oneOf(["create", "edit"]),
+  navigationItem: PropTypes.object,
+  onCloseForm: PropTypes.func,
+  onSetSortableNavigationTree: PropTypes.func,
+  shopId: PropTypes.string,
+  sortableTreeNode: PropTypes.object,
+  updateNavigationItem: PropTypes.func
+};
+
+export default NavigationItemForm;

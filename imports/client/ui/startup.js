@@ -7,20 +7,22 @@ import { Tracker } from "meteor/tracker";
 import { ThemeProvider } from "styled-components";
 import { ThemeProvider as MuiThemeProvider } from "@material-ui/core/styles";
 import { ApolloProvider } from "react-apollo";
-import { DndProvider } from "react-dnd";
-import HTML5Backend from "react-dnd-html5-backend";
 import { ComponentsProvider } from "@reactioncommerce/components-context";
 import { TranslationProvider } from "/imports/plugins/core/ui/client/providers";
 import initApollo from "/imports/plugins/core/graphql/lib/helpers/initApollo";
+
+
 import { defaultTheme } from "@reactioncommerce/catalyst";
 import { loadRegisteredBlocks, loadRegisteredComponents } from "@reactioncommerce/reaction-components";
 import { SnackbarProvider } from "notistack";
 import appComponents from "./appComponents";
+
 import theme from "./theme";
 import App from "./layouts/App";
 import getRootNode from "./utils/getRootNode";
 import RouterContext from "./context/RouterContext";
 import snackbarPosition from "./utils/getSnackbarPosition";
+import OAuthError from "/imports/client/ui/components/OidcComponents/OAuthError";
 
 const { oidcClientId, oidcUrl, rootUrl } = Meteor.settings.public;
 
@@ -53,11 +55,11 @@ const oidcProps = {
   // These are components for which the @axa-fr/react-oidc-context package shows
   // default text if we don't override these. We don't really need them since in
   // our situation they're only shown for a second.
-  authenticating: () => null,
-  callbackComponentOverride: () => null,
-  notAuthenticated: () => null,
-  notAuthorized: () => null,
-  sessionLostComponent: () => null
+ // authenticating: LoadingSignIn,
+ // callbackComponentOverride: LoadingSignIn,
+  notAuthenticated: OAuthError,
+  notAuthorized: OAuthError,
+  sessionLostComponent: OAuthError
 };
 
 Meteor.startup(() => {
@@ -68,40 +70,40 @@ Meteor.startup(() => {
 
   Tracker.autorun((computation) => {
     const primaryShopSub = Meteor.subscribe("PrimaryShop");
-
     if (primaryShopSub.ready()) {
       ReactDOM.render(
-        (
-          <ApolloProvider client={apolloClient}>
-            <BrowserRouter>
-              <AuthenticationProvider {...oidcProps}>
-                <TranslationProvider>
-                  <ComponentsProvider value={appComponents}>
-                    <ThemeProvider theme={theme}>
-                      <MuiThemeProvider theme={defaultTheme}>
-                        <SnackbarProvider anchorOrigin={snackbarPosition} maxSnack={3}>
-                          <DndProvider backend={HTML5Backend}>
-                            <Route>
-                              {(routeProps) => (
-                                <RouterContext.Provider value={routeProps}>
-                                  <App />
-                                </RouterContext.Provider>
-                              )}
-                            </Route>
-                          </DndProvider>
-                        </SnackbarProvider>
-                      </MuiThemeProvider>
-                    </ThemeProvider>
-                  </ComponentsProvider>
-                </TranslationProvider>
-              </AuthenticationProvider>
-            </BrowserRouter>
-          </ApolloProvider>
-        ),
+        <ApolloProvider client={apolloClient}>
+          <BrowserRouter>
+            <AuthenticationProvider {...oidcProps}>
+              <TranslationProvider>
+                <ComponentsProvider value={appComponents}>
+                  <ThemeProvider theme={theme}>
+                    <MuiThemeProvider theme={defaultTheme}>
+                      <SnackbarProvider anchorOrigin={snackbarPosition} maxSnack={3}>
+                        <Route>
+                          {(routeProps) => (
+                            <RouterContext.Provider value={routeProps}>
+                              <App />
+                            </RouterContext.Provider>
+                          )}
+                        </Route>
+                      </SnackbarProvider>
+                    </MuiThemeProvider>
+                  </ThemeProvider>
+                </ComponentsProvider>
+              </TranslationProvider>
+            </AuthenticationProvider>
+          </BrowserRouter>
+        </ApolloProvider>,
         getRootNode()
       );
 
       computation.stop();
+    } else {
+      ReactDOM.render(
+        <p>Loading...</p>,
+        getRootNode()
+      );
     }
   });
 });
